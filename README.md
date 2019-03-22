@@ -18,6 +18,27 @@ Raspberry Pi based Pool Controller
 * manual switch for enabling / disabling automatic pool control
 * automatic frost securing
 
+## Data Storage
+
+### Database
+We will use a mySql database to store values and logs. (local or internet)
+
+### Tables
+
+#### events (based on different event types)
+* id
+* timestamp
+* source (gpio or a defined id string)
+* type (debug / info / warning / error)
+* data (the event data - could be a message or values from some sensor (we need to define a fixed format for those)
+
+#### configuration
+* key
+* value
+* defaultValue
+* valueType (boolean, string, number, time, date, duration?)
+* description
+
 ## Programming
 * Language: Python
 * Invocation: Cron
@@ -36,23 +57,3 @@ Development of a graphical user interface for the pool controller. All temperatu
 ### Android / iPhone App
 
 
-## Data Storage
-
-### Database
-We will use a mySql database to store values and logs.
-
-### Tables
-
-#### events (based on different event types)
-* id
-* timestamp
-* source (gpio or a defined id string)
-* type (debug / info / warning / error)
-* data (the event data - could be a message or values from some sensor (we need to define a fixed format for those)
-
-#### configuration
-* key
-* value
-* defaultValue
-* valueType (boolean, string, number, time, date, duration?)
-* description
