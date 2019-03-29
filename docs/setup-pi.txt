@@ -1,0 +1,88 @@
+# system auf neuesten Stand bringen
+sudo apt-get update
+sudo apt-get upgrade
+
+# Pi Setup Wizard starten
+sudo piwiz
+
+# computer name ändern
+sudo nano /etc/hostname 
+
+# reboot um änderungen zu übernehmen
+reboot
+
+# fail2ban installieren
+sudo apt install fail2ban
+sudo systemctl start fail2ban
+
+# 1W aktivieren 
+#   # Enable 1wire bus
+#   dtoverlay=w1-gpio
+sudo nano /boot/config.txt
+
+# wiringpi installieren
+sudo apt-get install wiringpi 
+
+# ssh service aktivieren
+sudo systemctl status ssh.service 
+
+#mysql installieren (mariadb)
+sudo apt-get install mysql-server -y
+sudo mysql_secure_installation 
+# mysql aktivieren und starten
+sudo systemctl enable mariadb
+sudo systemctl start mariadb
+
+# Abhängikeiten installieren
+sudo apt-get install libtool libusb-1.0.0-dev librtlsdr-dev rtl-sdr cmake
+
+# postfix installieren "poolcontrol.lan" -> nur lokal
+sudo apt-get install postfix
+
+# mqtt
+sudo apt-get install mosquitto mosquitto-clients
+sudo pip3 install paho-mqtt python-etcd
+
+# git folder erstellen
+mkdir git
+cd git/
+ 
+# rtl_433 Git Repository holen
+git clone https://github.com/merbanan/rtl_433.git
+
+# in das rtl_433 Verzeichnis wechseln
+cd rtl_433/
+# Erstelle ein build Verzeichnis
+mkdir build
+cd build/
+# Compile starten
+cmake ../
+# Make
+make
+# Install
+sudo make install
+# Testen, Ausgeben der Programm Parameter
+rtl_433 -h
+
+# udev rules erstellen
+sudo nano /lib/udev/rules.d/rtl-sdr.rules
+#einfügen
+# RTL2832U OEM vid/pid, e.g. ezcap EzTV668 (E4000), Newsky TV28T (E4000/R820T) etc.
+SUBSYSTEMS=="usb", ATTRS{idVendor}=="0bda", ATTRS{idProduct}=="2838", MODE:="0666", ENV{ID_SOFTWARE_RADIO}="1"
+
+# user gruppen anpassen
+sudo usermod -a -G dialout,gpio,video,spi,netdev,i2c pi
+
+# raspi-poolcontrol installieren
+git clone https://github.com/lhein/raspi-poolcontroller.git
+
+# python module installieren
+sudo python3 -m pip install RPi.GPIO
+sudo python3 -m pip install DBcm
+sudo python3 -m pip install pyrtlsdr
+
+# crontab anpassen
+sudo crontab -e
+
+siehe crontab.txt
+

@@ -1,0 +1,32 @@
+Setup DB:
+
+you will need a password at 
+  <enter your password here> 
+positions
+
+
+on shell type:
+  sudo mysql
+
+in mysql shell type:
+  create database poolcontrol;
+
+  grant all privileges on poolcontrol.* to 'poolboy'@'localhost' identified by '<enter your password here>'
+
+  flush privileges;
+
+  CTRL-D
+
+update the dbconfig file:
+
+in subfolder 
+  scripts
+open the file 
+  dbconfig.json
+in your favourite editor
+
+and update the password value with the same password you used in the granall priliges command from above
+
+save and exit editor
+
+
