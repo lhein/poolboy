@@ -2,7 +2,10 @@
 create database poolcontrol;
 grant all privileges on poolcontrol.* to 'poolboy'@'localhost' identified by '<passwort>'
 
-# useful defaults füllen
+# Tabellen erstellen
+# die Tabellen werden automatisch erstellt
+
+# useful defaults füllen (nachdem die Tabellen erstellt wurden)
 insert into pc_configuration (config_key, config_value) values ('FROSTMODE', 'OFF'); # Frostschutzmodus
 insert into pc_configuration (config_key, config_value) values ('EMERGENCY-MODE', 'OFF'); # Notfallmodus bei Fehler in der Anlage
 insert into pc_configuration (config_key, config_value) values ('PUMP-DAILY-RUN', '360'); # Laufzeit der Pumpe pro Tag in Minuten
