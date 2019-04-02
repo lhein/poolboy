@@ -128,8 +128,14 @@ if gpioutils.getAutomaticModeState() == constants.ON or dbcontrol.getAutomaticMo
             print('Filterpumpe aktiviert. Protokolliere Startzeit der Pumpe')
     else: 
         print("Keine Filterzeit!")
-        if (dbcontrol.getHeatingOverrideMode() == constants.OFF_STRING and \
-            gpioutils.getFilterPumpState() == constants.ON):
+        print("Override: " + dbcontrol.getHeatingOverrideMode())
+        if utils.maxDailyFilterRuntimeReached():
+            print("MaxRuntimeReached: TRUE")
+        else:
+            print("MaxRuntimeReached: FALSE")
+        print("Pumpe: " + str(gpioutils.getFilterPumpState()))
+        if (dbcontrol.getHeatingOverrideMode() == constants.OFF_STRING or \
+            (utils.maxDailyFilterRuntimeReached() == True and gpioutils.getFilterPumpState() == constants.ON)):
             print("Pumpe noch aktiv! Deaktiviere Pumpe!")
             gpioutils.deactivateFilterPump()
             print('Filterpumpe deaktiviert. Protokolliere Endzeit und Laufzeit der Pumpe')

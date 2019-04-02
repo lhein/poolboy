@@ -151,6 +151,13 @@ def updateAutomaticMode(status):
         status = constants.OFF_STRING
     updateControllerConfig(constants.CTRL_CONFIG_KEY_AUTOMATIC, status, utils.getCurrentTimestampAsString())
 
+def updateEmergencyMode(status):
+    if status == True or status == constants.ON or status == constants.ON_STRING:
+        status = constants.ON_STRING
+    else:
+        status = constants.OFF_STRING
+    updateControllerConfig(constants.CTRL_CONFIG_KEY_EMERGENCY, status, utils.getCurrentTimestampAsString())
+
 def setSolarLaunchTime(timestamp):
     updateControllerConfig(constants.CTRL_CONFIG_KEY_SOLAR_ENABLE_TIME, timestamp, timestamp)
 
@@ -199,7 +206,7 @@ def updatePumpRuntime():
         overall = overall + durationInMinutes
         midnight = datetime.now().replace(hour=0, minute=0, second=0)
         # for the daily counter we only count time take on the same day
-        if pumpLaunched < midnight:
+        if datetime.strptime(pumpLaunched, '%Y-%m-%d %H:%M:%S') < midnight:
             durationInMinutes = utils.calculateDurationInMinutes(timestamp, midnight)
         daily = daily + durationInMinutes
         # save the overall and daily runtimes to db
