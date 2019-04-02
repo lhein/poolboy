@@ -42,6 +42,20 @@ sudo apt-get install postfix
 # mqtt
 sudo apt-get install mosquitto mosquitto-clients
 sudo pip3 install paho-mqtt python-etcd
+# credentials setzen
+sudo mosquitto_passwd -c /etc/mosquitto/pwfile <username>
+then when asked for password:
+<enter password>
+afterwards put credentials in 
+   scripts/constants.py (MQTT_USER / MQTT_PASSWD)
+then open
+   /etc/mosquitto/mosquitto.conf
+remove or comment with # the following line
+   include_dir /etc/mosquitto/conf.d
+and to the end add the following lines
+   allow_anonymous false
+   password_file /etc/mosquitto/pwfile
+   listener 1883
 
 # git folder erstellen
 mkdir git
@@ -82,7 +96,13 @@ sudo python3 -m pip install DBcm
 sudo python3 -m pip install pyrtlsdr
 
 # crontab anpassen
-sudo crontab -e
+sudo crontab -e  
+(siehe crontab.txt - path anpassen)
 
-siehe crontab.txt
+# configuration anpassen
+scripts/constants.py
+scripts/dbconfig.json
+scripts/query*.py
+
+
 

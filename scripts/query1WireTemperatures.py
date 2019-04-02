@@ -4,7 +4,7 @@ import json
 import constants # our own constants def file
 import utils     # our own utils file
 
-import paho.mqtt.publish as publish
+import paho.mqtt.client as mqtt #import the client
  
 # local constants only used in this script
 ID = 'id'
@@ -31,13 +31,22 @@ def read_from_w1(sensorid):
         temp = '%.1f'%temp
     return temp;
 
-# create the db tables if not existing
-dbcontrol.readyDB()
+# start mqtt client
+client = mqtt.Client('1WIRE-SENSOR-POLLER')
+
+# Set the username and password for the MQTT client
+client.username_pw_set(constants.MQTT_USER, constants.MQTT_PASSWD)
+
+# connect
+client.connect(constants.MQTT_SERVER, constants.MQTT_PORT, 60)
 
 # read the sensor data
 for sensor in SENSORS:
     temp = read_from_w1(sensor[DEVICE])
     msg = utils.createSensorMQTTStructure(sensor[ID])
     msg[constants.SENSOR_TEMP_KEY] = temp;
-    publish.single(constants.MQTT_TOPIC_TEMPS, json.dumps(msg), hostname=constants.MQTT_SERVER)
+    client.publish(constants.MQTT_TOPIC_TEMPS, json.dumps(msg))
+
+# finally disconnect
+client.disconnect()
 

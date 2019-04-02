@@ -5,7 +5,7 @@ import json
 import constants # our own constants def file
 import utils # our own utils file
 
-import paho.mqtt.publish as publish
+import paho.mqtt.client as mqtt #import the client
 
 MODEL = 'model'
 HUM   = 'humidity'
@@ -15,6 +15,12 @@ BAT   = 'battery'
 TIME  = 'time'
 DEV   = 'device'
 
+# start mqtt client
+client = mqtt.Client('RADIO-SENSOR-POLLER')
+
+# Set the username and password for the MQTT client
+client.username_pw_set(constants.MQTT_USER, constants.MQTT_PASSWD)
+
 # read the current weather data (cron start every 10 minutes - abort after 550 sec of 600 sec
 process = os.popen('/usr/local/bin/rtl_433 -G -F json -T 100')
 s = process.read()
@@ -22,6 +28,9 @@ s = process.read()
 if not s:
     os.system('sudo /usr/sbin/usb_modeswitch -v 0x0bda -p 0x2838 --reset-usb')
     sys.exit(1)
+
+# connect
+client.connect(constants.MQTT_SERVER, constants.MQTT_PORT, 60)
 
 # process <n> lines of json and filter for interesting sensors
 lines = s.splitlines()
@@ -47,13 +56,15 @@ for line in lines:
             sensorid = constants.SENSOR_GREENHOUSE_ID
         elif json_obj[DEV] == constants.SENSOR_GARDENHOUSE:
             sensorid = constants.SENSOR_GARDENHOUSE_ID
-
         if sensorid != '':
             msg = utils.createSensorMQTTStructure(sensorid)
             msg[constants.SENSOR_TEMP_KEY] = temp;
             msg[constants.SENSOR_HUM_KEY] = humidity;
             msg[constants.SENSOR_BAT_KEY] = battery_status;
             msg[constants.SENSOR_TIME_KEY] = timestamp;
-            publish.single(constants.MQTT_TOPIC_TEMPS, json.dumps(msg), hostname=constants.MQTT_SERVER)
+            client.publish(constants.MQTT_TOPIC_TEMPS, json.dumps(msg))
+            client.loop()
 
+# finally disconnect
+client.disconnect()
 
