@@ -117,6 +117,7 @@ def getSolarState():
 ##################
 def activateAutomaticMode():
     if getAutomaticModeState() == constants.OFF:
+        dbcontrol.updateAutomaticMode(constants.ON_STRING)
         writeToGPIO(constants.GPIO_AUTOMATIC, constants.ON)
         # insert events into event table
         dbcontrol.raiseEvent(utils.getCurrentTimestampAsString(), constants.EVENT_TYPE_CONTROLLER_MODE, constants.EVENT_PRIORITY_INFO, 'Automatikbetrieb wurde aktiviert.')
@@ -126,6 +127,7 @@ def activateAutomaticMode():
 def deactivateAutomaticMode():
     if getAutomaticModeState() == constants.ON:
         writeToGPIO(constants.GPIO_AUTOMATIC, constants.OFF)
+        dbcontrol.updateAutomaticMode(constants.OFF_STRING)
         # insert events into event table
         dbcontrol.raiseEvent(utils.getCurrentTimestampAsString(), constants.EVENT_TYPE_CONTROLLER_MODE, constants.EVENT_PRIORITY_INFO, 'Automatikbetrieb wurde deaktiviert.')
         # log action for later statistics
@@ -229,7 +231,10 @@ def getCoolerModeState():
 ##################
 def activateEmergencyMode():
     if getEmergencyModeState() == constants.OFF:
+        if getAutomaticModeState() == constants.ON:
+            deactivateAutomaticMode()
         writeToGPIO(constants.GPIO_EMERGENCY_MODE, constants.ON)
+        dbcontrol.updateEmergencyMode(constants.ON_STRING)
         # insert events into event table
         dbcontrol.raiseEvent(utils.getCurrentTimestampAsString(), constants.EVENT_TYPE_CONTROLLER_MODE, constants.EVENT_PRIORITY_INFO, 'Not-Aus wurde aktiviert.')
         # log action for later statistics
@@ -237,6 +242,7 @@ def activateEmergencyMode():
 
 def deactivateEmergencyMode():
     if getEmergencyModeState() == constants.ON:
+        dbcontrol.updateEmergencyMode(constants.OFF_STRING)
         writeToGPIO(constants.GPIO_EMERGENCY_MODE, constants.OFF)
         # insert events into event table
         dbcontrol.raiseEvent(utils.getCurrentTimestampAsString(), constants.EVENT_TYPE_CONTROLLER_MODE, constants.EVENT_PRIORITY_INFO, 'Not-Aus wurde quittiert.')
