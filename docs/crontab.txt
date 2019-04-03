@@ -27,7 +27,7 @@
 */2 * * * * python3 /home/pi/git/poolboy/scripts/query1WireTemperatures.py
 
 # poolboy control script
-*/1 * * * * ( sleep 60 ; python3 /home/pi/git/poolboy/scripts/poolboy.py )
+*/1 * * * * python3 /home/pi/git/poolboy/scripts/poolboy.py
 
 0 0 * * * python3 /home/pi/git/poolboy/scripts/newday.py
 
