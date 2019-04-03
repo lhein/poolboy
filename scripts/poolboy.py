@@ -100,7 +100,14 @@ if gpioutils.getAutomaticModeState() == constants.ON or dbcontrol.getAutomaticMo
         sys.exit()
     else:
         gpioutils.deactivateFrostMode()
-
+        if utils.insideFilterSchedule() == False:
+            print("Pumpe noch aktiv! Deaktiviere Pumpe!")
+            gpioutils.deactivateFilterPump()
+            print('Filterpumpe deaktiviert. Protokolliere Endzeit und Laufzeit der Pumpe')
+            if solarStateChanged == False:
+                gpioutils.deactivateSolar()
+                solarStateChanged = True
+                print('Solar deaktiviert. Protokolliere Endzeit und Laufzeit')            
 
     # check if frostmode should be enabled
     if utils.shouldFrostModeBeEnabled():

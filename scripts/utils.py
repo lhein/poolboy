@@ -83,7 +83,7 @@ def shouldFrostModeBeEnabled():
     else:
         print("Frostmodus aktivieren?")
         print(str(temp) + " <= " + str(frostModeEnableLimit))
-        return temp <= frostModeEnableLimit
+        return temp != constants.SENSOR_NO_DATA and temp <= frostModeEnableLimit
 
 def isCoolingRequired():
     maxPoolTemp = float(dbcontrol.getMaximumPoolTemperature())
