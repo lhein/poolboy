@@ -13,6 +13,7 @@ reboot
 
 # fail2ban installieren
 sudo apt install fail2ban
+sudo systemctl enable fail2ban
 sudo systemctl start fail2ban
 
 # 1W aktivieren 
@@ -24,11 +25,13 @@ sudo nano /boot/config.txt
 sudo apt-get install wiringpi 
 
 # ssh service aktivieren
-sudo systemctl status ssh.service 
+sudo systemctl enable ssh.service 
+sudo systemctl start ssh.service 
 
 #mysql installieren (mariadb)
 sudo apt-get install mysql-server -y
 sudo mysql_secure_installation 
+
 # mysql aktivieren und starten
 sudo systemctl enable mariadb
 sudo systemctl start mariadb
@@ -38,24 +41,6 @@ sudo apt-get install libtool libusb-1.0.0-dev librtlsdr-dev rtl-sdr cmake
 
 # postfix installieren "poolcontrol.lan" -> nur lokal
 sudo apt-get install postfix
-
-# mqtt
-sudo apt-get install mosquitto mosquitto-clients
-sudo pip3 install paho-mqtt python-etcd
-# credentials setzen
-sudo mosquitto_passwd -c /etc/mosquitto/pwfile <username>
-then when asked for password:
-<enter password>
-afterwards put credentials in 
-   scripts/constants.py (MQTT_USER / MQTT_PASSWD)
-then open
-   /etc/mosquitto/mosquitto.conf
-remove or comment with # the following line
-   include_dir /etc/mosquitto/conf.d
-and to the end add the following lines
-   allow_anonymous false
-   password_file /etc/mosquitto/pwfile
-   listener 1883
 
 # git folder erstellen
 mkdir git
@@ -88,12 +73,15 @@ SUBSYSTEMS=="usb", ATTRS{idVendor}=="0bda", ATTRS{idProduct}=="2838", MODE:="066
 sudo usermod -a -G dialout,gpio,video,spi,netdev,i2c pi
 
 # raspi-poolcontrol installieren
-git clone https://github.com/lhein/raspi-poolcontroller.git
+git clone https://github.com/lhein/poolboy.git
 
 # python module installieren
 sudo python3 -m pip install RPi.GPIO
 sudo python3 -m pip install DBcm
 sudo python3 -m pip install pyrtlsdr
+
+# ADS1x15 AD Wandler Lib installieren
+sudo pip install adafruit-ads1x15
 
 # crontab anpassen
 sudo crontab -e  
@@ -103,6 +91,5 @@ sudo crontab -e
 scripts/constants.py
 scripts/dbconfig.json
 scripts/query*.py
-
 
 

@@ -1,208 +1,278 @@
-#################################################################################################################################################
-#																		#
-# 	POOLBOY - Script zum Steuern der Pumpe und des Solarabsorbers										#
-#																		#
-#################################################################################################################################################
-#																		#
-#	FUNKTIONSWEISE:																#
-#																		#
-#	// bei wintermode alles aus und solar auf												#
-#	wenn DB wintermodus															#
-#		-> wenn Pumpe an														#
-#			-> pumpe aus														#
-#			-> endzeit und laufzeit protokollieren											#
-#			-> wenn Solar an													#
-#				-> endzeit und laufzeit protokollieren										#
-#		-> wenn Solar zu														#
-#			-> solar aufmachen, keine startzeit protokollieren									#
-#		-> Automatik deaktivieren													#
-#		-> Manuelles Filter aus														#
-#		-> Manuelles Solar aus														#
-#		-> Wintermodus aktivieren													#
-#																		#
-#       // automatik im zeitfenster bei nicht erreichter max laufzeit										#
-# 	wenn innerhalb zeitfenster && pumpe inaktiv && tageslaufzeit nicht erreicht && automatic an gpio = ON					#
-# 		-> pumpe starten														#
-#               -> startzeit der pumpe in db festhalten												#
-#																		# 
-# 	// solar override im automatic modus (auch bei inaktiver pumpe)										#
-#       wenn solardelta >= minSolarDelta && !manualSolarMode && automatic									#
-#               -> wenn pumpe inaktiv														# 
-#	 		-> pumpe starten													#
-#       	        -> startzeit der pumpe in db festhalten											#
-#		-> solar aktivieren														#
-#               -> startzeit solar in db festhalten												#
-#																		# 
-# 	// abschalten von solar sobald kein Ertrag mehr möglich ist und die pumpe noch läuft und kein manueller solarmode aktiv			#
-# 	wenn pumpe aktiv && solar aktiv && !manuellerSolarMode && solarDelta < hysteresis (minimalErtrag)					#
-# 		-> solar deaktiveren														#
-# 		-> stopzeit in db festhalten													#
-# 		-> solarlaufzeit in db addieren													#
-# 																		#
-#################################################################################################################################################
-import sys
 import time
+import servicelayer
 
-import constants # our own constants def file
-import dbcontrol # our own db utils file
-import gpioutils
-import utils # our own utils file
+debugMode = True
 
-# init gpio
-gpioutils.init()
+def log(msg):
+    if debugMode:
+        print(msg)
 
-# Emergency Case Handler
-if dbcontrol.getEmergencyMode() == constants.ON_STRING:
-    print('Not-Aus aktiv! Bitte zuerst Fehler beheben und Not-Aus quittieren.')
-    gpioutils.activateEmergencyMode()
-    if gpioutils.getFilterPumpState() == constants.ON:
-        print('Filterpumpe läuft noch...deaktiviere...')
-        gpioutils.deactivateFilterPump()
-        print('Filterpumpe deaktiviert. Protokolliere Endzeit und Laufzeit der Pumpe')
-    if gpioutils.getSolarState() == constants.ON:
-        print('Solar-Bypass ist noch offen! Schliesse den Bypass...')
-        gpioutils.deactivateSolar()
-        print('Solar-Bypass ist jetzt geschlossen.')
+def mainLoop():
 
-    gpioutils.deactivateAutomaticMode()
-    gpioutils.deactivateManualFilterMode()
-    gpioutils.deactivateManualSolarMode()
-    sys.exit()
-else:
-    gpioutils.deactivateEmergencyMode()
+    ############################################
+    ### EMERGENCY MODE HANDLING 
+    ############################################
 
-# we remember if we changed the solar state before (don' change more than once per cylce
-solarStateChanged = False
-
-# we only run automated control logic when Automatic is ON
-if gpioutils.getAutomaticModeState() == constants.ON or dbcontrol.getAutomaticMode() == constants.ON_STRING:
-    if gpioutils.getAutomaticModeState() == constants.OFF:
-        gpioutils.activateAutomaticMode()
-    # remember we are in automatic mode
-    dbcontrol.updateAutomaticMode(constants.ON_STRING)
-
-    # active Frost Mode Handler
-    if dbcontrol.getFrostMode() == constants.ON_STRING:
-        print('Frostschutzmodus!')
-        if gpioutils.getFilterPumpState() == constants.OFF:
-            print('Filterpumpe offline...aktiviere...')
-            gpioutils.activateFilterPump()
-            print('Filterpumpe aktiviert. Protokolliere Endzeit und Laufzeit der Pumpe')
-        if gpioutils.getSolarState() == constants.OFF:
-            print('Solar-Bypass ist geschlossen! Öffne den Bypass...')
-            gpioutils.activateSolar()
-            print('Solar-Bypass ist jetzt offen.')
-
-        gpioutils.deactivateManualFilterMode()
-        gpioutils.deactivateManualSolarMode()
-        gpioutils.activateFrostMode()
-
-        sys.exit()
+    log("Determine if we are in Emergency Mode")
+    if servicelayer.isEmergencyModeActive():
+        log("Emergency Mode is active! Waiting for operator to fix problem! No further logic executed! Exiting!")
+        servicelayer.activateEmergencyMode()
+        return
     else:
-        gpioutils.deactivateFrostMode()
-        if utils.insideFilterSchedule() == False:
-            print("Pumpe noch aktiv! Deaktiviere Pumpe!")
-            gpioutils.deactivateFilterPump()
-            print('Filterpumpe deaktiviert. Protokolliere Endzeit und Laufzeit der Pumpe')
-            if solarStateChanged == False:
-                gpioutils.deactivateSolar()
-                solarStateChanged = True
-                print('Solar deaktiviert. Protokolliere Endzeit und Laufzeit')            
+        log("Emergency Mode is NOT active! Continue...")
+        servicelayer.deactivateEmergencyMode()
 
-    # check if frostmode should be enabled
-    if utils.shouldFrostModeBeEnabled():
-        print('Achtung Frostgefahr!')
-        if gpioutils.getFrostModeState() == constants.OFF:
-            gpioutils.activateFrostMode()
-            if (gpioutils.getFilterPumpState() == constants.OFF):
-                gpioutils.activateFilterPump()
-                print('Filterpumpe aktiviert. Protokolliere Startzeit der Pumpe')
-            if (gpioutils.getSolarState() == constants.OFF):
-                gpioutils.activateSolar()
-                print('Solarabsorber aktiviert. Protokolliere Startzeit')
-        sys.exit()
-    elif not utils.shouldFrostModeBeEnabled and gpioutils.getFrostModeState() == constants.ON:
-        print('Keine Frostgefahr mehr! Deaktiviere Pumpe und Solar.')
-        gpioutils.deactivateFrostMode()
-        sys.exit()
 
-    # Filter Activation Handler
-    if utils.insideFilterSchedule() == True and \
-       utils.maxDailyFilterRuntimeReached() == False:
-        print('Filterzeit!')
-        if (gpioutils.getFilterPumpState() == constants.OFF):
-            gpioutils.activateFilterPump()
-            print('Filterpumpe aktiviert. Protokolliere Startzeit der Pumpe')
-    else: 
-        print("Keine Filterzeit!")
-        print("Override: " + dbcontrol.getHeatingOverrideMode())
-        if utils.maxDailyFilterRuntimeReached():
-            print("MaxRuntimeReached: TRUE")
+    # we remember if we changed the solar state before (don' change more than once per cylce
+    solarStateChangedLately = False
+
+
+    ############################################
+    ### AUTOMATIC MODE HANDLING 
+    ############################################
+
+    log("Determine if we are in Automatic Mode")
+    if servicelayer.isAutomaticModeActive():
+        log("Automatic Mode is active!")
+        servicelayer.activateAutomaticMode()
+
+        #################################################
+        ### FROST MODE HANDLING - ONLY IN AUTOMATIC MODE
+        #################################################
+
+        # check if frostmode should be enabled
+        if servicelayer.shouldFrostModeBeActivated():
+            log("Danger! Frost! Activating Pump and Solar...")
+            servicelayer.activateFrostMode()
+            log("We are now in Frost Mode. No other logic executed. Exiting...")
+            return
         else:
-            print("MaxRuntimeReached: FALSE")
-        print("Pumpe: " + str(gpioutils.getFilterPumpState()))
-        if (dbcontrol.getHeatingOverrideMode() == constants.OFF_STRING or \
-            (utils.maxDailyFilterRuntimeReached() == True and gpioutils.getFilterPumpState() == constants.ON)):
-            print("Pumpe noch aktiv! Deaktiviere Pumpe!")
-            gpioutils.deactivateFilterPump()
-            print('Filterpumpe deaktiviert. Protokolliere Endzeit und Laufzeit der Pumpe')
-            if solarStateChanged == False:
-                gpioutils.deactivateSolar()
-                solarStateChanged = True
-                print('Solar deaktiviert. Protokolliere Endzeit und Laufzeit')
+            log("No Frost Danger...")
+            if servicelayer.isFrostModeActive():
+                log("Frost Mode no longer required...deactivating...")
+                servicelayer.deactivateFrostMode()
+
+
+        #####################################################################################
+        ### FILTER MODE HANDLING - ONLY IN AUTOMATIC MODE
+        #####################################################################################
+        #
+        # When to activate filter pump?
+        #    insideFilterSchedule AND maxDailyRuntimeNotReached -> normal filter schedule
+        #  OR
+        #    HeatingOverrideActive AND shouldSolarBeActivated -> heating active
+        #####################################################################################
+
+        # filter pump activation
+        log("Determine if filter pump can be activated...")
+        if  servicelayer.isInsideFilterSchedule() or \
+            servicelayer.isHeatingOverrideModeActive() and servicelayer.shouldSolarBeActivated():   
+
+            # log the mode to console
+            if servicelayer.isInsideFilterSchedule():
+                log("Filter Period Scheduled!")
             else:
-                print('Solar wird im nächsten Zyklus deaktiviert um den Motor zu schonen. (keine mehrfachen Zustandsänderungen in einem einzigen Zyklus!)')
+                log("Heating Override Mode active!")
 
-    # Solar Enablement Handler
-    if gpioutils.getSolarState() == constants.OFF and \
-       utils.shouldSolarBeActivated() and \
-       dbcontrol.getHeatingOverrideMode() == constants.ON_STRING and \
-       (gpioutils.getManualSolarModeState() == constants.OFF or utils.maxDailyFilterRuntimeReached() == False):
-        print("Solar sollte zugeschaltet werden")
-        if solarStateChanged == False:
-            if gpioutils.getFilterPumpState() == constants.OFF:
-                gpioutils.activateFilterPump()
-                print('Filterpumpe aktiviert. Protokolliere Startzeit der Pumpe')
-            gpioutils.activateSolar()
-            print('Solarabsorber aktiviert. Protokolliere Startzeit')
-            solarStateChanged = True
+            if not servicelayer.isFilterPumpActive():
+                servicelayer.activateFilterPump()
+            else:
+                log("Filter already active...")
 
-    # Solar Disable Handler
-    if gpioutils.getSolarState() == constants.ON and \
-       gpioutils.getFilterPumpState() == constants.ON and \
-       gpioutils.getCoolerModeState() == constants.OFF and \
-       utils.shouldSolarBeDeactivated() and \
-       gpioutils.getManualSolarModeState() == constants.OFF:
-        print("Solar sollte abgeschaltet werden")
-        if solarStateChanged == False:
-            gpioutils.deactivateSolar()
-            print('Solar deaktiviert. Protokolliere Endzeit und Laufzeit')
-            if (gpioutils.getFilterPumpState() == constants.ON and utils.insideFilterSchedule() == False):
-                gpioutils.deactivateFilterPump()
-                print('Filterpumpe deaktiviert. Protokolliere Laufzeit')
+        else: # outside filter schedule AND no override active
+            
+            log("Not inside filter schedule times.")
+
+        #####################################################################################
+        ### SOLAR MODE HANDLING - ONLY IN AUTOMATIC MODE
+        #####################################################################################
+        #
+        # When to activate solar in general?
+        #
+        #    shouldSolarBeActivated and not isSolarActive
+        #    
+        #####################################################################################
+
+        # solar enablement handling
+        log("Determine if solar can be activated...")
+        if not servicelayer.isSolarActive() and servicelayer.shouldSolarBeActivated():
+
+            ###########################################################################
+            # Conditions for NOT activating
+            ###########################################################################
+            #
+            #     solarStateChangedLately
+            #  OR
+            #     NOT headtingOverRideActive 
+            #  AND
+            #     maxDailyRuntimeReached OR NOT insideFilterSchedule
+            #
+            ###########################################################################
+
+            if solarStateChangedLately or \
+                not servicelayer.isHeatingOverrideModeActive() and not servicelayer.isInsideFilterSchedule():
+
+                # there is no reason to activate solar and pump
+                log('Conditions for enabling Solar are not met!')
+                if solarStateChangedLately:
+                    log("Solar State has been changed already in this cycle...")
+                else:
+                    log("Either Max Daily Filter Time has reached or outside the filter schedule while Heating Override is deactivated...")
+
+            else:
+
+                log("Solar should be activated...")
+                if not servicelayer.isFilterPumpActive():
+                    servicelayer.activateFilterPump()
+
+                servicelayer.activateSolar()
+                solarStateChangedLately = True
+
         else:
-            print('Solar wird im nächsten Zyklus deaktiviert um den Motor zu schonen. (keine mehrfachen Zustandsänderungen in einem einzigen Zyklus!)')
+            # log some output to console
+            if servicelayer.isSolarActive():
+                log("Solar is already active...")
+            else:
+                log("Not enough solar heat...")
 
-    # cooling mode handler
-    if utils.isCoolingRequired():
-        print("Poolwasser zu warm!")
-        if utils.isCoolingPossible():
-            print("Kühlungsmodus aktivieren!")
-            gpioutils.activateCoolerMode()
-            if gpioutils.getSolarState() == constants.OFF:
-                gpioutils.activateSolar()
-                print('Solarabsorber aktiviert. Protokolliere Startzeit')
-            if gpioutils.getFilterPumpState() == constants.OFF:
-                gpioutils.activateFilterPump()
-                print('Filterpumpe aktiviert. Protokolliere Startzeit der Pumpe')
+        #####################################################################################
+        ### SOLAR MODE HANDLING - ONLY IN AUTOMATIC MODE
+        #####################################################################################
+
+        # Solar Disable Handler
+        log("Determine if solar should be deactivated...")
+        if servicelayer.isSolarActive() and servicelayer.shouldSolarBeDeactivated():
+            # solar mode is active
+
+            #########################################################################
+            # When to deactivate?
+            #########################################################################
+            # 
+            #     filter pump active 
+            #  AND 
+            #     NOT cooler mode active
+            #  AND
+            #     minSolarRuntimeReached
+            # 
+            #########################################################################
+
+
+            if servicelayer.isFilterPumpActive() and \
+                not servicelayer.isCoolerModeActive() and \
+                servicelayer.isSolarMinRuntimeReached():
+
+                log("Solar Mode should be deactivated")
+                if not solarStateChangedLately:
+                    # deactivate solar 
+                    servicelayer.deactivateSolar()
+                    log("Solar deactivated!")
+                    # check if inside filter schedule
+                    if servicelayer.isFilterPumpActive() and not servicelayer.isInsideFilterSchedule():
+                        log("Filter pump was active. Deactivating...")
+                        servicelayer.deactivateFilterPump()
+                else:
+                    log("Solar State has been changed already in this cycle...")
+            else:
+                if servicelayer.isSolarMinRuntimeReached():
+                    log("Minimal Solar Runtime not yet reached. Keep Solar running...")
+                elif servicelayer.isCoolerModeActive():
+                    log("Cooler Mode is currently active. Keep Solar running...")
         else:
-            print("Solartemperatur zu hoch. Derzeit keine Kühlung möglich!")
-            if gpioutils.getCoolerModeState() == constants.ON:
-                print("Deaktiviere Kuehlungsmodus...")
-                gpioutils.deactivateCoolerMode()
+            if not servicelayer.isSolarActive():
+                # solar mode is already deactivated
+                log("Solar is not active. No actions required.")
+            else:
+                log("Solar should stay activated...")
+
+
+        #####################################################################################
+        ### COOLER MODE HANDLING - ONLY IN AUTOMATIC MODE
+        #####################################################################################
+
+        # cooling mode handler
+        log("Determine if Cooler Mode should be activated...")
+        if servicelayer.isCoolingRequired() and servicelayer.isCoolingPossible():
+            log("Pool water too warm!")
+
+            # check if cooling possible and not yet active
+            if not servicelayer.isCoolerModeActive():
+                log("Activating cooler mode...")
+                servicelayer.activateCoolerMode()
+            else:
+                log("Cooler Mode already active...")
+
+            # activate solar absorbers if needed
+            if not servicelayer.isSolarActive() and servicelayer.isSolarMinimalRuntimeReached() and not solarStateChangedLately:
+                log("Activating Solar Absorbers...")
+                servicelayer.activateSolar()
+                if not servicelayer.isFilterPumpActive():
+                    servicelayer.activateFilterPump()
+        else:
+            if not servicelayer.isCoolingPossible() and servicelayer.isCoolingRequired():
+                log("Solar temperature too high. No cooling possible!")
+                if servicelayer.isCoolerModeActive():
+                    servicelayer.deactivateCoolerMode()
+            else:
+                log("No Cooling required!")
+
+        #####################################################################################
+        ### CHECK IF THE PUMP IS STILL RUNNING AND CAN BE DEACTIVATED
+        #####################################################################################
+        log("Checking if Filter Pump is running and should be deactivated...")
+        if not servicelayer.isInsideFilterSchedule() and servicelayer.isFilterPumpActive():
+            log("Filter Pump is running outside scheduled times...")
+            if servicelayer.isCoolerModeActive():
+                log("Cooling mode active...Keep pump running...")
+            elif servicelayer.isSolarActive() and servicelayer.shouldSolarBeActivated():
+                log("Solar Heater active...Keep pump running...")
+            else:
+                log("No reason to run the pump....deactivating...")
+                # disable pump
+                servicelayer.deactivateFilterPump()
+        else:
+            if not servicelayer.isFilterPumpActive():
+                log("Pump is not active...")
+            else:
+                log("We are in scheduled filter time...")
+
     else:
-        print("Poolwasser nicht zu warm!")
-        
-else:
-    print("Automatik ist AUS! Nichts zu tun...")
+        log("Automatic Mode is not active! Skipping all logic!")
+
+        #################################################
+        ### MANUAL FILTER MODE HANDLING
+        #################################################
+
+        log("Determine Manual Filter Override Mode status...")
+        if servicelayer.isManualFilterModeActive():
+            log("Manual Filter Mode is active...")
+            servicelayer.activateManualFilterMode()
+        else:
+            log("Manual Filter Mode is not active...")
+            servicelayer.deactivateManualFilterMode()
+
+        #################################################
+        ### MANUAL SOLAR MODE HANDLING
+        #################################################
+
+        log("Determine Manual Solar Override Mode status...")
+        if servicelayer.isManualSolarModeActive():
+            log("Manual Solar Mode is active...")
+            servicelayer.activateManualSolarMode()
+        else:
+            log("Manual Solar Mode is not active...")
+            servicelayer.deactivateManualSolarMode()
+
+    #################################################
+    ### END OF MAIN LOOP
+    #################################################
+
+
+loop_interval = 60 # 60 secs loop interval
+servicelayer.init()
+
+while True:
+    log(">>> CYCLE START >>>")
+    mainLoop()
+    log("<<< CYCLE END <<<")
+    time.sleep(loop_interval);
 

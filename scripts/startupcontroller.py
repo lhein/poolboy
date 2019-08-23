@@ -1,3 +1,4 @@
+import commons
 import dbcontrol # our own db utils file
 import constants # our own constants def file
 import utils # our own utils file
@@ -13,7 +14,7 @@ gpioutils.setupGPIOPorts()
 gpioutils.deactivateAll()
 
 # remember the start time of the script
-timestamp = utils.getCurrentTimestampAsString()
+timestamp = commons.getCurrentTimestampAsString()
 
 # create the db tables if not existing
 dbcontrol.readyDB()
@@ -22,9 +23,9 @@ dbcontrol.readyDB()
 dbcontrol.updateControllerConfig(constants.CTRL_CONFIG_KEY_LAUNCHTIME, timestamp, timestamp)
 
 # insert events into event table
-dbcontrol.raiseEvent(timestamp, constants.EVENT_TYPE_CONTROLLER_STARTUP, constants.EVENT_PRIORITY_INFO, 'Poolsteuerung wurde gestartet.')
+dbcontrol.raiseEvent(timestamp, constants.EVENT_TYPE_CONTROLLER_STARTUP, constants.EVENT_PRIORITY_INFO, 'Pool Controller has been started.')
 # log action for later statistics
-dbcontrol.logAction(utils.getCurrentTimestampAsString(), constants.ACTION_TYPE_CONTROLLER_START, constants.ACTION_SOURCE_CONTROLLER, constants.ACTION_ENABLE)
+dbcontrol.logAction(commons.getCurrentTimestampAsString(), constants.ACTION_TYPE_CONTROLLER_START, constants.ACTION_SOURCE_CONTROLLER, constants.ACTION_ENABLE)
 
 emergencyMode = dbcontrol.getEmergencyMode()
 if emergencyMode == constants.ON_STRING:

@@ -3,6 +3,7 @@ import os
 import time
 import RPi.GPIO as GPIO
 
+import commons
 import dbcontrol # our own db utils file
 import constants # our own constants def file
 import utils # our own utils file
@@ -17,6 +18,8 @@ def setupGPIOPorts():
     GPIO.setup(constants.GPIO_FILTER_MAN, GPIO.OUT, initial=constants.OFF)
     GPIO.setup(constants.GPIO_SOLAR_MAN, GPIO.OUT, initial=constants.OFF)
     GPIO.setup(constants.GPIO_FROST_MODE, GPIO.OUT, initial=constants.OFF)
+#    GPIO.setup(constants.GPIO_SOLAR_OPENED, GPIO.IN, initial=constants.OFF)
+#    GPIO.setup(constants.GPIO_SOLAR_CLOSED, GPIO.IN, initial=constants.OFF)
 
 def init():
     GPIO.setwarnings(False)
@@ -61,14 +64,14 @@ def activateFilterPump():
         # if solar is active we need to do the protocol and reset
         if getSolarState() == constants.ON:
             dbcontrol.updateSolarRuntime()
-            dbcontrol.setSolarLaunchTime(utils.getCurrentTimestampAsString())
+            dbcontrol.setSolarLaunchTime(commons.getCurrentTimestampAsString())
         writeToGPIO(constants.GPIO_PUMP, constants.ON)
         # remember the start datetime
-        dbcontrol.setPumpLaunchTime(utils.getCurrentTimestampAsString())
+        dbcontrol.setPumpLaunchTime(commons.getCurrentTimestampAsString())
         # insert events into event table
-        dbcontrol.raiseEvent(utils.getCurrentTimestampAsString(), constants.EVENT_TYPE_DEVICE_STATE, constants.EVENT_PRIORITY_INFO, 'Filterpumpe wurde aktiviert.')
+        dbcontrol.raiseEvent(commons.getCurrentTimestampAsString(), constants.EVENT_TYPE_DEVICE_STATE, constants.EVENT_PRIORITY_INFO, 'Filterpumpe wurde aktiviert.')
         # log action for later statistics
-        dbcontrol.logAction(utils.getCurrentTimestampAsString(), constants.ACTION_TYPE_HW_STATUS, constants.ACTION_SOURCE_PUMP, constants.ACTION_ENABLE)
+        dbcontrol.logAction(commons.getCurrentTimestampAsString(), constants.ACTION_TYPE_HW_STATUS, constants.ACTION_SOURCE_PUMP, constants.ACTION_ENABLE)
 
 def deactivateFilterPump():
     if getFilterPumpState() == constants.ON:
@@ -79,9 +82,9 @@ def deactivateFilterPump():
         # calculate pump runtime and add to overall, finally reset the pump time config value
         dbcontrol.updatePumpRuntime()
         # insert events into event table
-        dbcontrol.raiseEvent(utils.getCurrentTimestampAsString(), constants.EVENT_TYPE_DEVICE_STATE, constants.EVENT_PRIORITY_INFO, 'Filterpumpe wurde deaktiviert.')
+        dbcontrol.raiseEvent(commons.getCurrentTimestampAsString(), constants.EVENT_TYPE_DEVICE_STATE, constants.EVENT_PRIORITY_INFO, 'Filterpumpe wurde deaktiviert.')
         # log action for later statistics
-        dbcontrol.logAction(utils.getCurrentTimestampAsString(), constants.ACTION_TYPE_HW_STATUS, constants.ACTION_SOURCE_PUMP, constants.ACTION_DISABLE)
+        dbcontrol.logAction(commons.getCurrentTimestampAsString(), constants.ACTION_TYPE_HW_STATUS, constants.ACTION_SOURCE_PUMP, constants.ACTION_DISABLE)
 
 def getFilterPumpState():
     return readFromGPIO(constants.GPIO_PUMP)
@@ -93,11 +96,11 @@ def activateSolar():
     if getSolarState() == constants.OFF:
         writeToGPIO(constants.GPIO_SOLAR, constants.ON)
         # remember the start datetime
-        dbcontrol.setSolarLaunchTime(utils.getCurrentTimestampAsString())
+        dbcontrol.setSolarLaunchTime(commons.getCurrentTimestampAsString())
         # insert events into event table
-        dbcontrol.raiseEvent(utils.getCurrentTimestampAsString(), constants.EVENT_TYPE_DEVICE_STATE, constants.EVENT_PRIORITY_INFO, 'Solarabsorber wurde aktiviert.')
+        dbcontrol.raiseEvent(commons.getCurrentTimestampAsString(), constants.EVENT_TYPE_DEVICE_STATE, constants.EVENT_PRIORITY_INFO, 'Solarabsorber wurde aktiviert.')
         # log action for later statistics
-        dbcontrol.logAction(utils.getCurrentTimestampAsString(), constants.ACTION_TYPE_HW_STATUS, constants.ACTION_SOURCE_SOLAR, constants.ACTION_ENABLE)
+        dbcontrol.logAction(commons.getCurrentTimestampAsString(), constants.ACTION_TYPE_HW_STATUS, constants.ACTION_SOURCE_SOLAR, constants.ACTION_ENABLE)
 
 def deactivateSolar():
     if getSolarState() == constants.ON:
@@ -105,9 +108,9 @@ def deactivateSolar():
         # calculate solar runtime and add to overall, finally reset the solar time config value
         dbcontrol.updateSolarRuntime()
         # insert events into event table
-        dbcontrol.raiseEvent(utils.getCurrentTimestampAsString(), constants.EVENT_TYPE_DEVICE_STATE, constants.EVENT_PRIORITY_INFO, 'Solarabsorber wurde deaktiviert.')
+        dbcontrol.raiseEvent(commons.getCurrentTimestampAsString(), constants.EVENT_TYPE_DEVICE_STATE, constants.EVENT_PRIORITY_INFO, 'Solarabsorber wurde deaktiviert.')
         # log action for later statistics
-        dbcontrol.logAction(utils.getCurrentTimestampAsString(), constants.ACTION_TYPE_HW_STATUS, constants.ACTION_SOURCE_SOLAR, constants.ACTION_DISABLE)
+        dbcontrol.logAction(commons.getCurrentTimestampAsString(), constants.ACTION_TYPE_HW_STATUS, constants.ACTION_SOURCE_SOLAR, constants.ACTION_DISABLE)
 
 def getSolarState():
     return readFromGPIO(constants.GPIO_SOLAR)
@@ -120,18 +123,18 @@ def activateAutomaticMode():
         dbcontrol.updateAutomaticMode(constants.ON_STRING)
         writeToGPIO(constants.GPIO_AUTOMATIC, constants.ON)
         # insert events into event table
-        dbcontrol.raiseEvent(utils.getCurrentTimestampAsString(), constants.EVENT_TYPE_CONTROLLER_MODE, constants.EVENT_PRIORITY_INFO, 'Automatikbetrieb wurde aktiviert.')
+        dbcontrol.raiseEvent(commons.getCurrentTimestampAsString(), constants.EVENT_TYPE_CONTROLLER_MODE, constants.EVENT_PRIORITY_INFO, 'Automatikbetrieb wurde aktiviert.')
         # log action for later statistics
-        dbcontrol.logAction(utils.getCurrentTimestampAsString(), constants.ACTION_TYPE_MODE_SWITCH, constants.ACTION_SOURCE_MODE_AUTOMATIC, constants.ACTION_ENABLE)
+        dbcontrol.logAction(commons.getCurrentTimestampAsString(), constants.ACTION_TYPE_MODE_SWITCH, constants.ACTION_SOURCE_MODE_AUTOMATIC, constants.ACTION_ENABLE)
 
 def deactivateAutomaticMode():
     if getAutomaticModeState() == constants.ON:
         writeToGPIO(constants.GPIO_AUTOMATIC, constants.OFF)
         dbcontrol.updateAutomaticMode(constants.OFF_STRING)
         # insert events into event table
-        dbcontrol.raiseEvent(utils.getCurrentTimestampAsString(), constants.EVENT_TYPE_CONTROLLER_MODE, constants.EVENT_PRIORITY_INFO, 'Automatikbetrieb wurde deaktiviert.')
+        dbcontrol.raiseEvent(commons.getCurrentTimestampAsString(), constants.EVENT_TYPE_CONTROLLER_MODE, constants.EVENT_PRIORITY_INFO, 'Automatikbetrieb wurde deaktiviert.')
         # log action for later statistics
-        dbcontrol.logAction(utils.getCurrentTimestampAsString(), constants.ACTION_TYPE_MODE_SWITCH, constants.ACTION_SOURCE_MODE_AUTOMATIC, constants.ACTION_DISABLE)
+        dbcontrol.logAction(commons.getCurrentTimestampAsString(), constants.ACTION_TYPE_MODE_SWITCH, constants.ACTION_SOURCE_MODE_AUTOMATIC, constants.ACTION_DISABLE)
 
 def getAutomaticModeState():
     return readFromGPIO(constants.GPIO_AUTOMATIC)
@@ -143,17 +146,17 @@ def activateManualFilterMode():
     if getManualFilterModeState() == constants.OFF:
         writeToGPIO(constants.GPIO_FILTER_MAN, constants.ON)
         # insert events into event table
-        dbcontrol.raiseEvent(utils.getCurrentTimestampAsString(), constants.EVENT_TYPE_CONTROLLER_MODE, constants.EVENT_PRIORITY_INFO, 'Manueller Pumpenbetrieb wurde aktiviert.')
+        dbcontrol.raiseEvent(commons.getCurrentTimestampAsString(), constants.EVENT_TYPE_CONTROLLER_MODE, constants.EVENT_PRIORITY_INFO, 'Manueller Pumpenbetrieb wurde aktiviert.')
         # log action for later statistics
-        dbcontrol.logAction(utils.getCurrentTimestampAsString(), constants.ACTION_TYPE_MODE_SWITCH, constants.ACTION_SOURCE_MODE_MANUALFILTER, constants.ACTION_ENABLE)
+        dbcontrol.logAction(commons.getCurrentTimestampAsString(), constants.ACTION_TYPE_MODE_SWITCH, constants.ACTION_SOURCE_MODE_MANUALFILTER, constants.ACTION_ENABLE)
 
 def deactivateManualFilterMode():
     if getManualFilterModeState() == constants.ON:
         writeToGPIO(constants.GPIO_FILTER_MAN, constants.OFF)
         # insert events into event table
-        dbcontrol.raiseEvent(utils.getCurrentTimestampAsString(), constants.EVENT_TYPE_CONTROLLER_MODE, constants.EVENT_PRIORITY_INFO, 'Manueller Pumpenbetrieb wurde deaktiviert.')
+        dbcontrol.raiseEvent(commons.getCurrentTimestampAsString(), constants.EVENT_TYPE_CONTROLLER_MODE, constants.EVENT_PRIORITY_INFO, 'Manueller Pumpenbetrieb wurde deaktiviert.')
         # log action for later statistics
-        dbcontrol.logAction(utils.getCurrentTimestampAsString(), constants.ACTION_TYPE_MODE_SWITCH, constants.ACTION_SOURCE_MODE_MANUALFILTER, constants.ACTION_DISABLE)
+        dbcontrol.logAction(commons.getCurrentTimestampAsString(), constants.ACTION_TYPE_MODE_SWITCH, constants.ACTION_SOURCE_MODE_MANUALFILTER, constants.ACTION_DISABLE)
 
 def getManualFilterModeState():
     return readFromGPIO(constants.GPIO_FILTER_MAN)
@@ -165,17 +168,17 @@ def activateManualSolarMode():
     if getManualSolarModeState() == constants.OFF:
         writeToGPIO(constants.GPIO_SOLAR_MAN, constants.ON)
         # insert events into event table
-        dbcontrol.raiseEvent(utils.getCurrentTimestampAsString(), constants.EVENT_TYPE_CONTROLLER_MODE, constants.EVENT_PRIORITY_INFO, 'Manueller Solarbetrieb wurde aktiviert.')
+        dbcontrol.raiseEvent(commons.getCurrentTimestampAsString(), constants.EVENT_TYPE_CONTROLLER_MODE, constants.EVENT_PRIORITY_INFO, 'Manueller Solarbetrieb wurde aktiviert.')
         # log action for later statistics
-        dbcontrol.logAction(utils.getCurrentTimestampAsString(), constants.ACTION_TYPE_MODE_SWITCH, constants.ACTION_SOURCE_MODE_MANUALSOLAR, constants.ACTION_ENABLE)
+        dbcontrol.logAction(commons.getCurrentTimestampAsString(), constants.ACTION_TYPE_MODE_SWITCH, constants.ACTION_SOURCE_MODE_MANUALSOLAR, constants.ACTION_ENABLE)
 
 def deactivateManualSolarMode():
     if getManualSolarModeState() == constants.ON:
         writeToGPIO(constants.GPIO_SOLAR_MAN, constants.OFF)
         # insert events into event table
-        dbcontrol.raiseEvent(utils.getCurrentTimestampAsString(), constants.EVENT_TYPE_CONTROLLER_MODE, constants.EVENT_PRIORITY_INFO, 'Manueller Solarbetrieb wurde deaktiviert.')
+        dbcontrol.raiseEvent(commons.getCurrentTimestampAsString(), constants.EVENT_TYPE_CONTROLLER_MODE, constants.EVENT_PRIORITY_INFO, 'Manueller Solarbetrieb wurde deaktiviert.')
         # log action for later statistics
-        dbcontrol.logAction(utils.getCurrentTimestampAsString(), constants.ACTION_TYPE_MODE_SWITCH, constants.ACTION_SOURCE_MODE_MANUALSOLAR, constants.ACTION_DISABLE)
+        dbcontrol.logAction(commons.getCurrentTimestampAsString(), constants.ACTION_TYPE_MODE_SWITCH, constants.ACTION_SOURCE_MODE_MANUALSOLAR, constants.ACTION_DISABLE)
 
 def getManualSolarModeState():
     return readFromGPIO(constants.GPIO_SOLAR_MAN)
@@ -187,17 +190,17 @@ def activateFrostMode():
     if getFrostModeState() == constants.OFF:
         writeToGPIO(constants.GPIO_FROST_MODE, constants.ON)
         # insert events into event table
-        dbcontrol.raiseEvent(utils.getCurrentTimestampAsString(), constants.EVENT_TYPE_CONTROLLER_MODE, constants.EVENT_PRIORITY_INFO, 'Frostschutzmodus wurde aktiviert.')
+        dbcontrol.raiseEvent(commons.getCurrentTimestampAsString(), constants.EVENT_TYPE_CONTROLLER_MODE, constants.EVENT_PRIORITY_INFO, 'Frostschutzmodus wurde aktiviert.')
         # log action for later statistics
-        dbcontrol.logAction(utils.getCurrentTimestampAsString(), constants.ACTION_TYPE_MODE_SWITCH, constants.ACTION_SOURCE_MODE_FROST, constants.ACTION_ENABLE)
+        dbcontrol.logAction(commons.getCurrentTimestampAsString(), constants.ACTION_TYPE_MODE_SWITCH, constants.ACTION_SOURCE_MODE_FROST, constants.ACTION_ENABLE)
 
 def deactivateFrostMode():
     if getFrostModeState() == constants.ON:
         writeToGPIO(constants.GPIO_FROST_MODE, constants.OFF)
         # insert events into event table
-        dbcontrol.raiseEvent(utils.getCurrentTimestampAsString(), constants.EVENT_TYPE_CONTROLLER_MODE, constants.EVENT_PRIORITY_INFO, 'Frostschutzmodus wurde deaktiviert.')
+        dbcontrol.raiseEvent(commons.getCurrentTimestampAsString(), constants.EVENT_TYPE_CONTROLLER_MODE, constants.EVENT_PRIORITY_INFO, 'Frostschutzmodus wurde deaktiviert.')
         # log action for later statistics
-        dbcontrol.logAction(utils.getCurrentTimestampAsString(), constants.ACTION_TYPE_MODE_SWITCH, constants.ACTION_SOURCE_MODE_FROST, constants.ACTION_DISABLE)
+        dbcontrol.logAction(commons.getCurrentTimestampAsString(), constants.ACTION_TYPE_MODE_SWITCH, constants.ACTION_SOURCE_MODE_FROST, constants.ACTION_DISABLE)
 
 def getFrostModeState():
     return readFromGPIO(constants.GPIO_FROST_MODE)
@@ -210,17 +213,17 @@ def activateCoolerMode():
     if getCoolerModeState() == constants.OFF:
         writeToGPIO(constants.GPIO_COOLER_MODE, constants.ON)
         # insert events into event table
-        dbcontrol.raiseEvent(utils.getCurrentTimestampAsString(), constants.EVENT_TYPE_CONTROLLER_MODE, constants.EVENT_PRIORITY_INFO, 'Kuehlungsmodus wurde aktiviert.')
+        dbcontrol.raiseEvent(commons.getCurrentTimestampAsString(), constants.EVENT_TYPE_CONTROLLER_MODE, constants.EVENT_PRIORITY_INFO, 'Kuehlungsmodus wurde aktiviert.')
         # log action for later statistics
-        dbcontrol.logAction(utils.getCurrentTimestampAsString(), constants.ACTION_TYPE_MODE_SWITCH, constants.ACTION_SOURCE_MODE_COOLER, constants.ACTION_ENABLE)
+        dbcontrol.logAction(commons.getCurrentTimestampAsString(), constants.ACTION_TYPE_MODE_SWITCH, constants.ACTION_SOURCE_MODE_COOLER, constants.ACTION_ENABLE)
 
 def deactivateCoolerMode():
     if getCoolerModeState() == constants.ON:
         writeToGPIO(constants.GPIO_COOLER_MODE, constants.OFF)
         # insert events into event table
-        dbcontrol.raiseEvent(utils.getCurrentTimestampAsString(), constants.EVENT_TYPE_CONTROLLER_MODE, constants.EVENT_PRIORITY_INFO, 'Kuehlungsmodus wurde deaktiviert.')
+        dbcontrol.raiseEvent(commons.getCurrentTimestampAsString(), constants.EVENT_TYPE_CONTROLLER_MODE, constants.EVENT_PRIORITY_INFO, 'Kuehlungsmodus wurde deaktiviert.')
         # log action for later statistics
-        dbcontrol.logAction(utils.getCurrentTimestampAsString(), constants.ACTION_TYPE_MODE_SWITCH, constants.ACTION_SOURCE_MODE_COOLER, constants.ACTION_DISABLE)
+        dbcontrol.logAction(commons.getCurrentTimestampAsString(), constants.ACTION_TYPE_MODE_SWITCH, constants.ACTION_SOURCE_MODE_COOLER, constants.ACTION_DISABLE)
 
 def getCoolerModeState():
     return readFromGPIO(constants.GPIO_COOLER_MODE)
@@ -236,18 +239,18 @@ def activateEmergencyMode():
         writeToGPIO(constants.GPIO_EMERGENCY_MODE, constants.ON)
         dbcontrol.updateEmergencyMode(constants.ON_STRING)
         # insert events into event table
-        dbcontrol.raiseEvent(utils.getCurrentTimestampAsString(), constants.EVENT_TYPE_CONTROLLER_MODE, constants.EVENT_PRIORITY_INFO, 'Not-Aus wurde aktiviert.')
+        dbcontrol.raiseEvent(commons.getCurrentTimestampAsString(), constants.EVENT_TYPE_CONTROLLER_MODE, constants.EVENT_PRIORITY_INFO, 'Not-Aus wurde aktiviert.')
         # log action for later statistics
-        dbcontrol.logAction(utils.getCurrentTimestampAsString(), constants.ACTION_TYPE_MODE_SWITCH, constants.ACTION_SOURCE_MODE_EMERGENCY, constants.ACTION_ENABLE)
+        dbcontrol.logAction(commons.getCurrentTimestampAsString(), constants.ACTION_TYPE_MODE_SWITCH, constants.ACTION_SOURCE_MODE_EMERGENCY, constants.ACTION_ENABLE)
 
 def deactivateEmergencyMode():
     if getEmergencyModeState() == constants.ON:
         dbcontrol.updateEmergencyMode(constants.OFF_STRING)
         writeToGPIO(constants.GPIO_EMERGENCY_MODE, constants.OFF)
         # insert events into event table
-        dbcontrol.raiseEvent(utils.getCurrentTimestampAsString(), constants.EVENT_TYPE_CONTROLLER_MODE, constants.EVENT_PRIORITY_INFO, 'Not-Aus wurde quittiert.')
+        dbcontrol.raiseEvent(commons.getCurrentTimestampAsString(), constants.EVENT_TYPE_CONTROLLER_MODE, constants.EVENT_PRIORITY_INFO, 'Not-Aus wurde quittiert.')
         # log action for later statistics
-        dbcontrol.logAction(utils.getCurrentTimestampAsString(), constants.ACTION_TYPE_MODE_SWITCH, constants.ACTION_SOURCE_MODE_EMERGENCY, constants.ACTION_DISABLE)
+        dbcontrol.logAction(commons.getCurrentTimestampAsString(), constants.ACTION_TYPE_MODE_SWITCH, constants.ACTION_SOURCE_MODE_EMERGENCY, constants.ACTION_DISABLE)
 
 def getEmergencyModeState():
     return readFromGPIO(constants.GPIO_EMERGENCY_MODE)

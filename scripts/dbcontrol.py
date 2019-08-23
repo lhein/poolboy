@@ -2,16 +2,34 @@ from datetime import datetime
 import json
 from DBcm import UseDatabase
 
+import commons
 import constants # our own constants def file
 import utils # our own utils file
 
-_CREATE_SENSORDATA = """CREATE TABLE IF NOT EXISTS pc_sensordata (
+from sensor import Sensor
+from filterschedule import FilterSchedule
+
+
+_CREATE_SENSORDATA_TABLE = """CREATE TABLE IF NOT EXISTS pc_sensordata (
                 sensor_id varchar(25) NOT NULL, 
                 timestamp varchar(25) NOT NULL, 
                 temperature decimal(5,2) NOT NULL,
+                temperatureunit varchar(1) NOT NULL,
                 humidity decimal(5,2) NULL,
                 battery varchar(20) NULL, 
                 PRIMARY KEY(sensor_id, timestamp)
+             )"""
+
+_CREATE_SENSORS_TABLE = """CREATE TABLE IF NOT EXISTS pc_sensors (
+                id INT AUTO_INCREMENT,
+                sensor_location_id varchar(25) NOT NULL, 
+                sensor_transmit_type varchar(20) NOT NULL,
+                sensor_model varchar(200),
+                sensor_channel varchar(10),
+                sensor_address varchar(20),
+                temperatureunit varchar(1) NOT NULL,
+                lastmodified varchar(25) NOT NULL, 
+                PRIMARY KEY(id)
              )"""
 
 _CREATE_CONFIG_TABLE = """CREATE TABLE IF NOT EXISTS pc_configuration (
@@ -37,15 +55,23 @@ _CREATE_ACTIONS_TABLE = """CREATE TABLE IF NOT EXISTS pc_actions(id INT AUTO_INC
                 PRIMARY KEY(id)
              )"""
 
+_CREATE_FILTER_SCHEDULE_TABLE = """CREATE TABLE IF NOT EXISTS pc_filterschedule(
+                id INT AUTO_INCREMENT,
+                filterstart varchar(5) NOT NULL,
+                filterstop  varchar(5) NOT NULL,  
+                lastmodified varchar(25) NOT NULL,
+                PRIMARY KEY(id)
+             )"""
+
 _INSERT_SENSORDATA_CLIMATE = """INSERT INTO pc_sensordata
-                (sensor_id, timestamp, temperature, humidity, battery)
+                (sensor_id, timestamp, temperature, temperatureunit, humidity, battery)
              VALUES
-                (%s, %s, %s, %s, %s)"""
+                (%s, %s, %s, %s, %s, %s)"""
 
 _INSERT_SENSORDATA_TEMP = """INSERT INTO pc_sensordata
-                (sensor_id, timestamp, temperature)
+                (sensor_id, timestamp, temperature, temperatureunit)
              VALUES
-                (%s, %s, %s)"""
+                (%s, %s, %s, %s)"""
 
 _INSERT_OR_UPDATE_CONFIG = """INSERT INTO pc_configuration
                 (config_key, config_value, lastmodified)
@@ -66,13 +92,17 @@ _LOG_ACTION = """INSERT INTO pc_actions
              VALUES
                 (%s, %s, %s, %s)"""
 
+_GET_FILTER_SCHEDULES = """SELECT filterstart, filterstop FROM pc_filterschedule ORDER BY filterstart"""
+
+_GET_SENSORS = """SELECT sensor_location_id, sensor_transmit_type, sensor_model, sensor_channel, sensor_address, temperatureunit FROM pc_sensors WHERE sensor_transmit_type='%DUMMY%'"""
+
 _GET_CONFIG_VALUE = """SELECT config_value FROM pc_configuration WHERE config_key='%DUMMY%'"""
 
-_GET_LATEST_SENSOR_TEMP = """SELECT timestamp, temperature FROM pc_sensordata WHERE sensor_id='%DUMMY%' ORDER BY timestamp DESC LIMIT 1"""
+_GET_LATEST_SENSOR_TEMP = """SELECT timestamp, temperature, temperatureunit FROM pc_sensordata WHERE sensor_id='%DUMMY%' ORDER BY timestamp DESC LIMIT 1"""
 
 # load dbconfig from file
 def loadDBConfig():
-    with open('/home/pi/git/poolboy/scripts/dbconfig.json') as json_file:  
+    with open(constants.POOLBOY_INSTALL_FOLDER + '/scripts/dbconfig.json') as json_file:  
         return json.load(json_file)
 
 # update controller startup info in DB
@@ -83,7 +113,7 @@ def updateControllerConfig(key, value, timestamp):
 # update controller startup info in DB
 def queryControllerConfig(key, defaultValue):
     with UseDatabase(dbconfig) as cursor:
-        timestamp = utils.getCurrentTimestampAsString()
+        timestamp = commons.getCurrentTimestampAsString()
         cursor.execute(_GET_CONFIG_VALUE.replace('%DUMMY%', key))
         data = cursor.fetchall()
         if len(data) == 1:
@@ -92,14 +122,15 @@ def queryControllerConfig(key, defaultValue):
                 return value
             else:
                 # seems there is no valid value in the db - use fallback and raise a configuration error event
-                raiseEvent(timestamp, constants.EVENT_TYPE_CONTROLLER_CONFIG, constants.EVENT_PRIORITY_ERROR, 'Fehlerhafter Konfigurationswert >' + value + '< für ' + key + '. Bitte umgehend prüfen und ändern!')
-                utils.sendAlert(constants.ALERT_SENDER_DB, 'Fehlerhafter Konfigurationswert: ' + key + '=' + value + ' !')
+                raiseEvent(timestamp, constants.EVENT_TYPE_CONTROLLER_CONFIG, constants.EVENT_PRIORITY_ERROR, 'Invalid configuration value >' + value + '< for ' + key + '. Please check the value and correct it!')
                 return defaultValue
         else:
             # seems there is no value in the db - use fallback and raise a configuration error event
-            raiseEvent(timestamp, constants.EVENT_TYPE_CONTROLLER_CONFIG, constants.EVENT_PRIORITY_ERROR, 'Fehlender Konfigurationswert für ' + key + '. Bitte umgehend korrigieren!')
-            utils.sendAlert(constants.ALERT_SENDER_DB, 'Fehlender Konfigurationswert: ' + key + ' !')
+            raiseEvent(timestamp, constants.EVENT_TYPE_CONTROLLER_CONFIG, constants.EVENT_PRIORITY_ERROR, 'Missing configuration value for ' + key + '. Please fix this asap!')
             return defaultValue
+
+def getSystemTemperatureUnit():
+    return queryControllerConfig(constants.CTRL_CONFIG_KEY_TEMPERATURE_UNIT, constants.CTRL_CONFIG_DEFAULT_TEMPERATURE_UNIT)
 
 # retrieve the latest temperature a sensor has reported
 def getLastestSensorTemperature(sensor):
@@ -110,12 +141,17 @@ def getLastestSensorTemperature(sensor):
         if len(data) == 1:
             timestamp = data[0][0].strip()
             value = data[0][1]
+            unit = data[0][2]
 
             #  do not deliver sensor data older than SENSOR_MAX_AGE_IN_MINUTES
-            if utils.calculateDurationInMinutes(utils.getCurrentTimestampAsString(), timestamp) > int(sensorDataExpireInMinutes):
+            if commons.calculateDurationInMinutes(commons.getCurrentTimestampAsString(), timestamp) > int(sensorDataExpireInMinutes):
+                raiseEvent(timestamp, constants.EVENT_TYPE_DEVICE_STATE, constants.EVENT_PRIORITY_WARNING, 'Outdated temperature information for sensor ' + sensor + '! Last measured value is from ' + timestamp + '. Please check the sensor!')
                 return constants.SENSOR_NO_DATA
 
             if value != '':
+                sysUnit = getSystemTemperatureUnit()
+                if unit != sysUnit:
+                    value = commons.convertTemperatureTo(value, sysUnit)
                 return float(value)
             else:
                 return constants.SENSOR_NO_DATA
@@ -127,43 +163,73 @@ def raiseEvent(timestamp, event_type, prio, message):
     with UseDatabase(dbconfig) as cursor:
         cursor.execute(_RAISE_EVENT, (timestamp, event_type, prio, message))
 
+# retrieve all configured sensors
+def getSensorsForType(sensorType):
+    sensors = []
+
+    with UseDatabase(dbconfig) as cursor:
+        cursor.execute(_GET_SENSORS.replace('%DUMMY%', sensorType))
+        data = cursor.fetchall()
+        if len(data) > 0:
+            for row in data:
+                sensors.append(Sensor(row[0], row[1], row[2], row[3], row[4], row[5]))
+
+    return sensors
+
+# retrieve the filter schedule times
+def getFilterSchedules():
+    schedules = []
+
+    with UseDatabase(dbconfig) as cursor:
+        cursor.execute(_GET_FILTER_SCHEDULES)
+        data = cursor.fetchall()
+        if len(data) > 0:
+            for row in data:
+                schedules.append(FilterSchedule(row[0], row[1]))
+        else:
+            timestamp = commons.getCurrentTimestampAsString()
+            raiseEvent(timestamp, constants.EVENT_TYPE_CONTROLLER_CONFIG, constants.EVENT_PRIORITY_ERROR, 'There are filter times scheduled!')
+            updateAutomaticMode(False)
+
+    return schedules
+
 # log an action for statistics
 def logAction(timestamp, actionType, actionSource, action):
     with UseDatabase(dbconfig) as cursor:
         cursor.execute(_LOG_ACTION, (timestamp, actionType, actionSource, action))
 
 # save sensor data to DB
-def storeTemperature(sensor_id, timestamp, temp):
+def storeTemperature(sensor_id, timestamp, temp, unit):
     with UseDatabase(dbconfig) as cursor:
-        cursor.execute(_INSERT_SENSORDATA_TEMP, (sensor_id, timestamp, temp))
+        cursor.execute(_INSERT_SENSORDATA_TEMP, (sensor_id, timestamp, temp, unit))
 
-def storeClimate(sensor_id, timestamp, temp, humid, battery_status):
+def storeClimate(sensor_id, timestamp, temp, unit, humid, battery_status):
     with UseDatabase(dbconfig) as cursor:
-        cursor.execute(_INSERT_SENSORDATA_CLIMATE, (sensor_id, timestamp, temp, humid, battery_status))
+        cursor.execute(_INSERT_SENSORDATA_CLIMATE, (sensor_id, timestamp, temp, unit, humid, battery_status))
 
 def activateFrostMode():
-    updateControllerConfig(constants.CTRL_CONFIG_KEY_FROSTMODE, constants.ON_STRING, utils.getCurrentTimestampAsString())
+    updateControllerConfig(constants.CTRL_CONFIG_KEY_FROSTMODE, constants.ON_STRING, commons.getCurrentTimestampAsString())
 
 def updateAutomaticMode(status):
     if status == True or status == constants.ON or status == constants.ON_STRING:
         status = constants.ON_STRING
     else:
         status = constants.OFF_STRING
-    updateControllerConfig(constants.CTRL_CONFIG_KEY_AUTOMATIC, status, utils.getCurrentTimestampAsString())
+    updateControllerConfig(constants.CTRL_CONFIG_KEY_AUTOMATIC, status, commons.getCurrentTimestampAsString())
 
 def updateEmergencyMode(status):
     if status == True or status == constants.ON or status == constants.ON_STRING:
         status = constants.ON_STRING
     else:
         status = constants.OFF_STRING
-    updateControllerConfig(constants.CTRL_CONFIG_KEY_EMERGENCY, status, utils.getCurrentTimestampAsString())
+    updateControllerConfig(constants.CTRL_CONFIG_KEY_EMERGENCY, status, commons.getCurrentTimestampAsString())
 
 def setSolarLaunchTime(timestamp):
     updateControllerConfig(constants.CTRL_CONFIG_KEY_SOLAR_ENABLE_TIME, timestamp, timestamp)
 
 def updateSolarRuntime():
     # remember call time
-    timestamp = utils.getCurrentTimestampAsString()
+    timestamp = commons.getCurrentTimestampAsString()
 
     # obtain the last launch time and the overall solar runtime from db
     solarLaunched = getSolarLaunchTime()
@@ -173,10 +239,10 @@ def updateSolarRuntime():
 
     if solarLaunched == '':
         # something went wrong...we should have had a value for the last solar launch
-        utils.sendAlert(constants.ALERT_SENDER_DB, "Warnung! Der Startzeitpunkt des Solarabsorbers konnte nicht ermittelt werden. Keine Laufzeitprotokollierung.")
+        raiseEvent(timestamp, constants.EVENT_TYPE_CONTROLLER_CONFIG, constants.EVENT_PRIORITY_WARNING, 'Warning! Unable to determine the start time of the solar absorber. Cannot log the runtime.')
     else:
         # calculate the runtime duration in minutes
-        overall = overall + utils.calculateDurationInMinutes(timestamp, solarLaunched)
+        overall = overall + commons.calculateDurationInMinutes(timestamp, solarLaunched)
         # save the overall runtime to db
         updateControllerConfig(constants.CTRL_CONFIG_KEY_SOLAR_RUNTIME, overall, timestamp)
 
@@ -188,30 +254,23 @@ def setPumpLaunchTime(timestamp):
 
 def updatePumpRuntime():
     # remember call time
-    timestamp = utils.getCurrentTimestampAsString()
+    timestamp = commons.getCurrentTimestampAsString()
 
     # obtain the last launch time and the overall pump runtime from db
     pumpLaunched = getPumpLaunchTime()
 
     # obtain the overall and daily pump runtime
     overall = int(queryControllerConfig(constants.CTRL_CONFIG_KEY_FILTER_RUNTIME_OVERALL, constants.CTRL_CONFIG_DEFAULT_FILTER_RUNTIME))
-    daily   = int(queryControllerConfig(constants.CTRL_CONFIG_KEY_FILTER_RUNTIME_DAILY, constants.CTRL_CONFIG_DEFAULT_FILTER_RUNTIME))
 
     if pumpLaunched == '':
         # something went wrong...we should have had a value for the last pump launch
-        utils.sendAlert(constants.ALERT_SENDER_DB, "Warnung! Der Startzeitpunkt der Filterpumpe konnte nicht ermittelt werden. Keine Laufzeitprotokollierung.")
+        raiseEvent(timestamp, constants.EVENT_TYPE_CONTROLLER_CONFIG, constants.EVENT_PRIORITY_WARNING, 'Warning! Unable to determine the start time of the filter pump. Cannot log the runtime.')
     else:
         # calculate the runtime duration in minutes
-        durationInMinutes = utils.calculateDurationInMinutes(timestamp, pumpLaunched)
+        durationInMinutes = commons.calculateDurationInMinutes(timestamp, pumpLaunched)
         overall = overall + durationInMinutes
-        midnight = datetime.now().replace(hour=0, minute=0, second=0)
-        # for the daily counter we only count time take on the same day
-        if datetime.strptime(pumpLaunched, '%Y-%m-%d %H:%M:%S') < midnight:
-            durationInMinutes = utils.calculateDurationInMinutes(timestamp, midnight)
-        daily = daily + durationInMinutes
-        # save the overall and daily runtimes to db
+        # save the overall runtime to db
         updateControllerConfig(constants.CTRL_CONFIG_KEY_FILTER_RUNTIME_OVERALL, overall, timestamp)
-        updateControllerConfig(constants.CTRL_CONFIG_KEY_FILTER_RUNTIME_DAILY, daily, timestamp)
 
     # reset the last lauch time in db
     updateControllerConfig(constants.CTRL_CONFIG_KEY_FILTER_ENABLE_TIME, '', timestamp)
@@ -234,26 +293,11 @@ def getHeatingOverrideMode():
 def getMinimalSolarRuntime():
     return queryControllerConfig(constants.CTRL_CONFIG_KEY_SOLAR_MIN_RUNTIME, constants.CTRL_CONFIG_DEFAULT_SOLAR_MIN_RUNTIME)
 
-def getScheduledFilterStartTime():
-    return queryControllerConfig(constants.CTRL_CONFIG_KEY_FILTER_SCHEDULE_START, constants.CTRL_CONFIG_DEFAULT_FILTER_SCHEDULE_START)
-
-def getScheduledFilterStopTime():
-    return queryControllerConfig(constants.CTRL_CONFIG_KEY_FILTER_SCHEDULE_STOP, constants.CTRL_CONFIG_DEFAULT_FILTER_SCHEDULE_STOP)
-
-def getMaxDailyFilterTimeInMinutes():
-    return int(queryControllerConfig(constants.CTRL_CONFIG_KEY_FILTER_RUNTIME_MAX_DAILY, constants.CTRL_CONFIG_DEFAULT_FILTER_RUNTIME_MAX_DAILY))
-
 def getSolarEnableDelta():
     return int(queryControllerConfig(constants.CTRL_CONFIG_KEY_SOLAR_ENABLE_DELTA, constants.CTRL_CONFIG_DEFAULT_SOLAR_ENABLE_DELTA))
 
 def getSolarDisableDelta():
     return int(queryControllerConfig(constants.CTRL_CONFIG_KEY_SOLAR_DISABLE_DELTA, constants.CTRL_CONFIG_DEFAULT_SOLAR_DISABLE_DELTA))
-
-def getPumpDailyRuntime():
-    return int(queryControllerConfig(constants.CTRL_CONFIG_KEY_FILTER_RUNTIME_DAILY, constants.CTRL_CONFIG_DEFAULT_FILTER_RUNTIME))
-
-def getPumpDailyRuntimeMax():
-    return int(queryControllerConfig(constants.CTRL_CONFIG_KEY_FILTER_RUNTIME_MAX_DAILY, constants.CTRL_CONFIG_DEFAULT_FILTER_RUNTIME_MAX_DAILY))
 
 def getPumpLaunchTime():
     return queryControllerConfig(constants.CTRL_CONFIG_KEY_FILTER_ENABLE_TIME, '')
@@ -264,13 +308,18 @@ def getSolarLaunchTime():
 def getMaximumPoolTemperature():
     return queryControllerConfig(constants.CTRL_CONFIG_KEY_MAX_POOL_TEMP, constants.CTRL_CONFIG_DEFAULT_MAX_POOL_TEMP)
 
+def getCoolerEnableDelta():
+    return int(queryControllerConfig(constants.CTRL_CONFIG_KEY_COOLER_ENABLE_DELTA, constants.CTRL_CONFIG_DEFAULT_COOLER_ENABLE_DELTA))
+
 # setup db table if required
 def createTablesIfNeeded():
     with UseDatabase(dbconfig) as cursor:
         cursor.execute(_CREATE_CONFIG_TABLE)
         cursor.execute(_CREATE_EVENTS_TABLE)
-        cursor.execute(_CREATE_SENSORDATA)
+        cursor.execute(_CREATE_SENSORDATA_TABLE)
         cursor.execute(_CREATE_ACTIONS_TABLE)
+        cursor.execute(_CREATE_FILTER_SCHEDULE_TABLE)
+        cursor.execute(_CREATE_SENSORS_TABLE)
 
 # prepare all database tables
 def readyDB():

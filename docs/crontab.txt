@@ -23,14 +23,11 @@
 
 # collect radio sensor climate data
 */2 * * * * python3 /home/pi/git/poolboy/scripts/query433Temperatures.py
+
 # collect 1wire sensor tempertures
 */2 * * * * python3 /home/pi/git/poolboy/scripts/query1WireTemperatures.py
 
-# poolboy control script
-*/1 * * * * python3 /home/pi/git/poolboy/scripts/poolboy.py
-
-0 0 * * * python3 /home/pi/git/poolboy/scripts/newday.py
-
 # on each reboot execute script
-@reboot ( sleep 45 ; python3 /home/pi/git/poolboy/scripts/startupcontroller.py ; sleep 10; python3 /home/pi/git/poolboy/scripts/temperatureprocessor.py & )
+@reboot ( sleep 45 ; python3 /home/pi/git/poolboy/scripts/startupcontroller.py ; sleep 10; python3 /home/pi/git/poolboy/scripts/poolboy.py & )
+
 
