@@ -2,48 +2,49 @@
 Raspberry Pi based Pool Controller
 
 ## Features
-* collect temperatures from a number of sensors and store them
-* collect humidity of sensors if supported
+* collect temperatures from a number of sensors
+* collect humidity from a number of sensors (if supported)
 * check battery status of sensors and issue warning / alert if battery is low
-* daily pump scheduling
+* daily pump scheduling (free configurable multiple schedules)
 * configure max pool water temperature
+* cooling an overheated pool depending on temperatures in automatic mode
 * configure temperature deltas for enabling / disabling solar heating
-* configure a min temp for the pool water for anti frost mode -> will result in pumping to prevent frost damage
-* override capabilities for pump whenever pool is too cold and temp delta is fine
+* automatic frost safe mode when in automatic mode
+* configure a minimum temperature for pool water for frost mode -> will result in pumping to prevent frost damage
+* override capabilities for pool heating / cooling
 * manual override to disable / enable solar heating
 * manual override to disable / enable pool pump
 * manual switch for enabling / disabling automatic pool control
-* automatic frost securing in automatic mode
-* cooling an overheated pool depending on temperatures in automatic mode
+* emergency mode for hard failures in HW or configuration / events / alerts
 
 ### Features in planning
 * sensor calibration
 * multi language support (german / english for now)
-* collect data from a water throughput sensor and store it
-* configure a min and a max water throughput (maybe depending on temperature / season / month)
+* determine filter pressure / signal need for backwashing / calibration of pressure
 * ...
 
 ## Data Storage
 * MySQL / MariaDB
-* leverages MQTT for transmitting data from sensors to a dedicated sensor data processor
 
 ## Programming
 * Language: Python
 * Invocation: Cron
 
 ## GUI
-Development of a graphical user interface for the pool controller. 
+Development of a web based graphical user interface for the pool controller. 
 
 ### Planned Features
 * show a dashboard with useful data (temps, operational modes of pump, solar, etc)
 * buttons for manipulating operational modes
-* dedicated area for displaying Alerts
-* statistics feature for temperatures
+* dedicated area for displaying Alerts / Events
+* statistics feature for temperatures, pressure, etc.
 * statistics feature for operational mode changes / hardware mode changes
-* statistics feature for runtimes (pump, solar, maybe throughput of water)
+* statistics feature for runtimes (pump, solar)
 * admin page for manipulating configuration values
 * admin page for calibrating sensors
 * admin page for viewing event logs
+* admin page for manipulating filter schedules
+* admin page for manipulating installed sensors
 * multi language support (german / english for now)
 
 ### Web UI 
