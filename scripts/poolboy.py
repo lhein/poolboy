@@ -117,7 +117,7 @@ def mainLoop():
                 if solarStateChangedLately:
                     log("Solar State has been changed already in this cycle...")
                 else:
-                    log("Either Max Daily Filter Time has reached or outside the filter schedule while Heating Override is deactivated...")
+                    log("Outside the filter schedule while Heating Override is deactivated...")
 
             else:
 
