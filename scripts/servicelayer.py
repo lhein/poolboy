@@ -148,6 +148,6 @@ def isCoolingRequired():
 def isCoolingPossible():
     return utils.isCoolingPossible()
 
-def isHeatingOverrideModeActive():
-    return dbcontrol.getHeatingOverrideMode() == constants.ON_STRING
+def isFilterOverrideModeActive():
+    return dbcontrol.getFilterOverrideMode() == constants.ON_STRING
 

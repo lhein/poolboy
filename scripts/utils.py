@@ -67,7 +67,7 @@ def shouldSolarBeActivated():
 # determine if we should enable solar absorbers because no effective heating is possible
 def shouldSolarBeDeactivated():
     print("Check Solar Disable Conditions...")
-    if (insideFilterSchedule() or dbcontrol.getHeatingOverrideMode() == constants.ON_STRING):
+    if (insideFilterSchedule() or dbcontrol.getFilterOverrideMode() == constants.ON_STRING):
         solarDisableDelta = dbcontrol.getSolarDisableDelta()
         fromSolarWaterTemp = dbcontrol.getLastestSensorTemperature(constants.SENSOR_RUECKLAUF_ID)
         solarAbsorberTemp = dbcontrol.getLastestSensorTemperature(constants.SENSOR_SOLAR_ID) # fallback if from absorber water temp is not available

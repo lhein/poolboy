@@ -66,13 +66,13 @@ def mainLoop():
         # filter pump activation
         log("Determine if filter pump can be activated...")
         if  servicelayer.isInsideFilterSchedule() or \
-            servicelayer.isHeatingOverrideModeActive() and servicelayer.shouldSolarBeActivated():   
+            servicelayer.isFilterOverrideModeActive() and servicelayer.shouldSolarBeActivated():
 
             # log the mode to console
             if servicelayer.isInsideFilterSchedule():
                 log("Filter Period Scheduled!")
             else:
-                log("Heating Override Mode active!")
+                log("Filter Override Mode active!")
 
             if not servicelayer.isFilterPumpActive():
                 servicelayer.activateFilterPump()
@@ -110,14 +110,14 @@ def mainLoop():
             ###########################################################################
 
             if solarStateChangedLately or \
-                not servicelayer.isHeatingOverrideModeActive() and not servicelayer.isInsideFilterSchedule():
+                not servicelayer.isFilterOverrideModeActive() and not servicelayer.isInsideFilterSchedule():
 
                 # there is no reason to activate solar and pump
                 log('Conditions for enabling Solar are not met!')
                 if solarStateChangedLately:
                     log("Solar State has been changed already in this cycle...")
                 else:
-                    log("Outside the filter schedule while Heating Override is deactivated...")
+                    log("Outside the filter schedule while Filter Override is deactivated...")
 
             else:
 
@@ -191,7 +191,7 @@ def mainLoop():
 
         # cooling mode handler
         log("Determine if Cooler Mode should be activated...")
-        if servicelayer.isCoolingRequired() and servicelayer.isCoolingPossible():
+        if servicelayer.isCoolingRequired() and servicelayer.isCoolingPossible() and (servicelayer.isFilterOverrideModeActive() or servicelayer.isInsideFilterSchedule()):
             log("Pool water too warm!")
 
             # check if cooling possible and not yet active
@@ -212,6 +212,8 @@ def mainLoop():
                 log("Solar temperature too high. No cooling possible!")
                 if servicelayer.isCoolerModeActive():
                     servicelayer.deactivateCoolerMode()
+            elif not servicelayer.isFilterOverrideModeActive() or not servicelayer.isInsideFilterSchedule():
+                log("Not inside filter schedule and filter override mode is not active.")
             else:
                 log("No Cooling required!")
 

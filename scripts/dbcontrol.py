@@ -287,8 +287,8 @@ def getFrostMode():
 def getFrostModeActivationLimit():
     return queryControllerConfig(constants.CTRL_CONFIG_KEY_FROSTMODE_LIMIT, constants.CTRL_CONFIG_DEFAULT_FROSTMODE_LIMIT)
 
-def getHeatingOverrideMode():
-    return queryControllerConfig(constants.CTRL_CONFIG_KEY_HEATING_OVERRIDE, constants.ON)
+def getFilterOverrideMode():
+    return queryControllerConfig(constants.CTRL_CONFIG_KEY_FILTER_OVERRIDE, constants.ON)
 
 def getMinimalSolarRuntime():
     return queryControllerConfig(constants.CTRL_CONFIG_KEY_SOLAR_MIN_RUNTIME, constants.CTRL_CONFIG_DEFAULT_SOLAR_MIN_RUNTIME)
